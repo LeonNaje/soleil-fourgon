@@ -77,6 +77,7 @@ td.bas{color:var(--bad);font-weight:700}
     <label>Consommation (Wh par jour)<input id="conso" type="number" inputmode="decimal" min="0" step="50"></label>
     <label>Charge de départ (%)<input id="soc0" type="number" inputmode="decimal" min="0" max="100" step="5"></label>
     <label>Seuil d’alerte (%)<input id="seuil" type="number" inputmode="decimal" min="0" max="100" step="5"></label>
+    <label>Rafales qui couchent le tracker (km/h)<input id="gust" type="number" inputmode="decimal" min="10" max="150" step="5"></label>
   </div>
 </details>
 
@@ -97,17 +98,18 @@ td.bas{color:var(--bad);font-weight:700}
   <ul>
     <li>Les prévisions sont fiables jusqu’à 4 ou 5 jours ; au-delà, les barres sont estompées.</li>
     <li>Le bilan de batterie est simplifié (un solde par jour). La charge la plus basse tombe en réalité juste avant le lever du soleil, donc garde de la marge.</li>
-    <li>Le tracker suppose un panneau qui suit le soleil par temps clair et se couche à plat par ciel couvert. Le vent fort et la consommation du tracker ne sont pas pris en compte.</li>
+    <li>Le tracker suppose un panneau qui suit le soleil par temps clair et se couche à plat par ciel couvert. Les heures où les rafales prévues dépassent ton seuil, il reste à plat. Les prévisions de rafales sont souvent plus faibles que le vent réel sur un emplacement exposé : prends un seuil plus bas que le vrai. La consommation du tracker n’est pas comptée.</li>
     <li>Données météo : Open-Meteo (usage personnel gratuit).</li>
   </ul>
 </section>
 </main>
 
+<script src="calc.js"></script>
 <script>
 "use strict";
 const $ = id => document.getElementById(id);
-const DEF = {pw:300, pr:0.75, tilt:45, az:0, ah:100, nb:1, volt:12.8, use:90, conso:400, soc0:80, seuil:20};
-const LIMITES = {pw:[10,5000], pr:[0.3,1], tilt:[0,90], az:[-180,180], ah:[1,2000], nb:[1,10], volt:[6,60], use:[10,100], conso:[0,20000], soc0:[0,100], seuil:[0,100]};
+const DEF = {pw:300, pr:0.75, tilt:45, az:0, ah:100, nb:1, volt:12.8, use:90, conso:400, soc0:80, seuil:20, gust:40};
+const LIMITES = {pw:[10,5000], pr:[0.3,1], tilt:[0,90], az:[-180,180], ah:[1,2000], nb:[1,10], volt:[6,60], use:[10,100], conso:[0,20000], soc0:[0,100], seuil:[0,100], gust:[10,150]};
 const SCEN = [["flat","À plat"],["tilt","Incliné"],["track","Tracker 2 axes"]];
 let S = {...DEF};
 let lieu = null;
@@ -179,8 +181,8 @@ async function prevoir(){
   if (cache && cache.cle === cle && Date.now() - cache.t < 600000) { afficher(cache.json); return; }
   msg("Récupération des prévisions…");
   const url = "https://api.open-meteo.com/v1/forecast?latitude=" + lieu.latitude + "&longitude=" + lieu.longitude
-    + "&hourly=shortwave_radiation,direct_normal_irradiance,diffuse_radiation,global_tilted_irradiance"
-    + "&tilt=" + S.tilt + "&azimuth=" + S.az + "&forecast_days=7&timezone=auto";
+    + "&hourly=shortwave_radiation,direct_normal_irradiance,diffuse_radiation,global_tilted_irradiance,wind_gusts_10m"
+    + "&tilt=" + S.tilt + "&azimuth=" + S.az + "&wind_speed_unit=kmh&forecast_days=7&timezone=auto";
   try {
     const r = await fetch(url);
     if (!r.ok) throw new Error("http " + r.status);
@@ -193,38 +195,8 @@ async function prevoir(){
   }
 }
 
-/* ---------- hauteur du soleil (degrés), formules NOAA simplifiées ---------- */
-function elevation(lat, lon, ms){
-  const rad = Math.PI / 180, d = new Date(ms);
-  const doy = Math.floor((ms - Date.UTC(d.getUTCFullYear(), 0, 0)) / 864e5);
-  const hr = d.getUTCHours() + d.getUTCMinutes() / 60;
-  const g = 2 * Math.PI / 365 * (doy - 1 + (hr - 12) / 24);
-  const eq = 229.18 * (0.000075 + 0.001868*Math.cos(g) - 0.032077*Math.sin(g) - 0.014615*Math.cos(2*g) - 0.040849*Math.sin(2*g));
-  const dec = 0.006918 - 0.399912*Math.cos(g) + 0.070257*Math.sin(g) - 0.006758*Math.cos(2*g) + 0.000907*Math.sin(2*g) - 0.002697*Math.cos(3*g) + 0.00148*Math.sin(3*g);
-  const ha = ((hr * 60 + eq + 4 * lon) / 4 - 180) * rad;
-  const s = Math.sin(lat*rad)*Math.sin(dec) + Math.cos(lat*rad)*Math.cos(dec)*Math.cos(ha);
-  return Math.asin(Math.max(-1, Math.min(1, s))) / rad;
-}
-
-/* ---------- calculs ---------- */
-function calculer(json){
-  const h = json.hourly, off = json.utc_offset_seconds || 0;
-  const k = S.pw * S.pr / 1000;
-  const par = {};
-  h.time.forEach((t, i) => {
-    const jour = t.slice(0, 10);
-    const utc = Date.UTC(+t.slice(0,4), +t.slice(5,7) - 1, +t.slice(8,10), +t.slice(11,13), +t.slice(14,16)) - off * 1000;
-    const el = elevation(lieu.latitude, lieu.longitude, utc - 1800000); // milieu de l'heure écoulée
-    const ghi = Math.max(0, h.shortwave_radiation[i] || 0);
-    const gti = Math.max(0, h.global_tilted_irradiance[i] || 0);
-    const dni = Math.max(0, h.direct_normal_irradiance[i] || 0);
-    const dif = Math.max(0, h.diffuse_radiation[i] || 0);
-    const suivi = el > 0 ? Math.max(ghi, dni + dif * (1 + Math.sin(el * Math.PI / 180)) / 2) : 0;
-    const j = par[jour] || (par[jour] = {jour, flat:0, tilt:0, track:0});
-    j.flat += ghi * k; j.tilt += gti * k; j.track += suivi * k;
-  });
-  return Object.values(par);
-}
+/* ---------- calculs (fichier calc.js, partagé avec le futur script d’alerte) ---------- */
+function calculer(json){ return SoleilCalc.calculer(json, S, lieu); }
 function simulerBatterie(jours, cap){
   const res = {};
   SCEN.forEach(([c]) => {
@@ -277,6 +249,7 @@ function afficher(json){
     const row = document.createElement("div"); row.className = "jour" + (i >= 5 ? " incertain" : "");
     const lab = document.createElement("div"); lab.className = "jlabel"; lab.textContent = nomJour(j.jour);
     if (i >= 5) { const s = document.createElement("small"); s.textContent = "moins fiable"; lab.appendChild(s); }
+    if (j.couche > 0) { const s = document.createElement("small"); s.textContent = "vent : " + j.couche + " h à plat"; lab.appendChild(s); }
     const bar = document.createElement("div"); bar.className = "barres";
     SCEN.forEach(([c]) => {
       const l = document.createElement("div"); l.className = "ligne";
