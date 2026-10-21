@@ -21,11 +21,14 @@
   /* json : réponse Open-Meteo (hourly + utc_offset_seconds)
      S    : réglages {pw, pr, gust, ...}   lieu : {latitude, longitude}
      Retourne un tableau de jours : {jour, flat, tilt, track, couche}
-       flat/tilt/track en Wh ; couche = nombre d'heures de jour où le tracker est couché à cause du vent. */
+       flat/tilt/track en Wh ; couche = heures de jour où le tracker est couché à cause du vent (décimal). */
   function calculer(json, S, lieu) {
     const h = json.hourly, off = json.utc_offset_seconds || 0;
     const k = S.pw * S.pr / 1000;
     const rafales = h.wind_gusts_10m || null;
+    const gb = S.gustBas == null ? S.gust : S.gustBas;      // seuil de relevage
+    const delai = S.delai == null ? 20 : S.delai;           // minutes avant de se relever
+    let bas = false;                                        // le tracker est-il couché ?
     const par = {};
     h.time.forEach(function (t, i) {
       const jour = t.slice(0, 10);
@@ -36,15 +39,22 @@
       const dni = Math.max(0, h.direct_normal_irradiance[i] || 0);
       const dif = Math.max(0, h.diffuse_radiation[i] || 0);
       const vent = rafales ? (rafales[i] || 0) : 0;
-      const couche = vent > S.gust;
+      // part = fraction de l'heure où le tracker travaille (1 = toute l'heure, 0 = couché)
+      let part = 1;
+      if (vent > S.gust) { bas = true; part = 0; }
+      else if (bas) {
+        if (vent >= gb) part = 0;                           // reste couché tant que ça souffle
+        else { bas = false; part = Math.max(0, (60 - delai) / 60); } // se relève après le délai
+      }
       let suivi = 0;
       if (el > 0) {
         // Par ciel couvert, le tracker revient à plat : on prend le meilleur des deux.
-        suivi = couche ? ghi : Math.max(ghi, dni + dif * (1 + Math.sin(el * Math.PI / 180)) / 2);
+        const normal = Math.max(ghi, dni + dif * (1 + Math.sin(el * Math.PI / 180)) / 2);
+        suivi = part * normal + (1 - part) * ghi;
       }
       const j = par[jour] || (par[jour] = { jour: jour, flat: 0, tilt: 0, track: 0, couche: 0 });
       j.flat += ghi * k; j.tilt += gti * k; j.track += suivi * k;
-      if (couche && el > 0) j.couche += 1;
+      if (el > 0) j.couche += 1 - part;
     });
     return Object.keys(par).map(function (c) { return par[c]; });
   }
