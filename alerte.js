@@ -18,13 +18,20 @@ async function envoyer(topic, titre, message, priorite, tags) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ topic: topic, title: titre, message: message, priority: priorite, tags: tags }),
   });
-  if (!r.ok) throw new Error("ntfy : réponse HTTP " + r.status);
+  if (!r.ok) {
+    let detail = "";
+    try { detail = (await r.text()).slice(0, 200); } catch (e) { /* ignoré */ }
+    throw new Error("ntfy : réponse HTTP " + r.status + (detail ? " — " + detail : ""));
+  }
 }
 
 async function main() {
-  const topic = process.env.NTFY_TOPIC;
+  const topic = (process.env.NTFY_TOPIC || "").trim();   // enlève espaces et retours à la ligne parasites
   const test = process.env.EVENT_NAME === "workflow_dispatch";
-  if (!topic) throw new Error("NTFY_TOPIC manquant : le secret GitHub n’est pas défini.");
+  if (!topic) throw new Error("NTFY_TOPIC manquant : le secret GitHub n’est pas défini ou est vide.");
+  if (!/^[A-Za-z0-9_-]{1,64}$/.test(topic)) {
+    throw new Error("Le nom du sujet (secret NTFY_TOPIC) est invalide : lettres, chiffres, tirets et tirets bas seulement, 64 caractères au maximum.");
+  }
 
   const cfg = JSON.parse(fs.readFileSync(path.join(__dirname, "config.json"), "utf8"));
   const lieu = cfg.lieu || {};
@@ -77,7 +84,8 @@ async function main() {
 main().catch(async (e) => {
   console.error("Erreur : " + e.message);
   try {
-    if (process.env.NTFY_TOPIC) await envoyer(process.env.NTFY_TOPIC, "Alerte solaire en panne", e.message, 3, ["x"]);
+    const t = (process.env.NTFY_TOPIC || "").trim();
+    if (/^[A-Za-z0-9_-]{1,64}$/.test(t)) await envoyer(t, "Alerte solaire en panne", e.message, 3, ["x"]);
   } catch (e2) { /* rien de plus à faire */ }
   process.exitCode = 1;
 });
