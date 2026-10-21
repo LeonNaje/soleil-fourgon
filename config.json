@@ -1,4 +1,23 @@
 {
-  "lieu": { "nom": "", "latitude": null, "longitude": null },
-  "reglages": {}
+  "lieu": {
+    "nom": "Landerneau, Bretagne",
+    "latitude": 48.5,
+    "longitude": -4.3
+  },
+  "reglages": {
+    "pw": 300,
+    "pr": 0.75,
+    "tilt": 45,
+    "az": 0,
+    "ah": 100,
+    "nb": 1,
+    "volt": 12.8,
+    "use": 90,
+    "conso": 400,
+    "soc0": 80,
+    "seuil": 20,
+    "gust": 50,
+    "gustBas": 40,
+    "scen": "flat"
+  }
 }
