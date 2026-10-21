@@ -17,11 +17,12 @@ h2{font-size:1.25rem;margin:0 0 4px}
 .sub{color:var(--mute);margin:0 0 14px}
 .carte{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
 form.recherche{display:flex;gap:8px}
-input,button{font:inherit;color:inherit}
-input{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+input,select,textarea,button{font:inherit;color:inherit}
+input,select,textarea{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+textarea{font:.8rem/1.4 ui-monospace,Consolas,monospace;margin:8px 0;resize:vertical}
 button{padding:9px 14px;border:0;border-radius:8px;background:var(--ink);color:var(--panel);cursor:pointer;white-space:nowrap}
 button.choix{display:block;width:100%;text-align:left;margin-top:6px;background:var(--bg);color:var(--ink);border:1px solid var(--line)}
-input:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+input:focus-visible,select:focus-visible,textarea:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
 #etat{color:var(--mute);margin:8px 0 0;min-height:1.2em}
 #etat.err{color:var(--bad)}
 summary{cursor:pointer;font-weight:600}
@@ -79,6 +80,7 @@ td.bas{color:var(--bad);font-weight:700}
     <label>Seuil d’alerte (%)<input id="seuil" type="number" inputmode="decimal" min="0" max="100" step="5"></label>
     <label>Le tracker se couche au-dessus de (km/h)<input id="gust" type="number" inputmode="decimal" min="10" max="150" step="5"></label>
     <label>Il se relève sous (km/h)<input id="gustBas" type="number" inputmode="decimal" min="5" max="150" step="5"></label>
+    <label>Alerte du matin calculée pour<select id="scen"><option value="flat">Panneau à plat</option><option value="tilt">Incliné à la main</option><option value="track">Tracker 2 axes</option></select></label>
   </div>
 </details>
 
@@ -93,6 +95,13 @@ td.bas{color:var(--bad);font-weight:700}
 <section class="carte" id="socCarte" hidden>
   <h2>Charge de la batterie en fin de journée</h2>
   <table id="soc"></table>
+</section>
+
+<section class="carte" id="alerteCarte" hidden>
+  <h2>Config de l’alerte du matin</h2>
+  <p class="sub">Copie ce texte, puis colle-le dans le fichier <b>config.json</b> du dépôt GitHub (il remplace tout). À refaire quand tu changes de lieu ou de réglages. Les coordonnées sont arrondies à environ 10 km, car le dépôt est public.</p>
+  <textarea id="cfgTexte" rows="9" readonly aria-label="Configuration à copier"></textarea>
+  <button type="button" id="cfgCopier">Copier</button>
 </section>
 
 <section class="carte notes">
@@ -112,7 +121,7 @@ const $ = id => document.getElementById(id);
 const DEF = {pw:300, pr:0.75, tilt:45, az:0, ah:100, nb:1, volt:12.8, use:90, conso:400, soc0:80, seuil:20, gust:50, gustBas:40};
 const LIMITES = {pw:[10,5000], pr:[0.3,1], tilt:[0,90], az:[-180,180], ah:[1,2000], nb:[1,10], volt:[6,60], use:[10,100], conso:[0,20000], soc0:[0,100], seuil:[0,100], gust:[10,150], gustBas:[5,150]};
 const SCEN = [["flat","À plat"],["tilt","Incliné"],["track","Tracker 2 axes"]];
-let S = {...DEF};
+let S = {...DEF, scen:"flat"};
 let lieu = null;
 let cache = null;
 
@@ -123,13 +132,13 @@ function sauver(){
 function charger(){
   try {
     const d = JSON.parse(localStorage.getItem("soleilFourgon") || "null");
-    if (d && d.S) S = {...DEF, ...d.S};
+    if (d && d.S) S = {...DEF, scen:"flat", ...d.S};
     if (d && d.lieu) lieu = d.lieu;
   } catch(e){}
 }
 
 /* ---------- réglages ---------- */
-function ecrireReglages(){ for (const k in DEF) $(k).value = S[k]; }
+function ecrireReglages(){ for (const k in DEF) $(k).value = S[k]; $("scen").value = S.scen || "flat"; }
 function lireReglages(){
   for (const k in DEF) {
     let v = parseFloat(String($(k).value).replace(",", "."));
@@ -137,6 +146,7 @@ function lireReglages(){
     S[k] = Math.min(LIMITES[k][1], Math.max(LIMITES[k][0], v));
   }
   if (S.gustBas > S.gust) S.gustBas = S.gust;
+  S.scen = ["flat","tilt","track"].includes($("scen").value) ? $("scen").value : "flat";
   ecrireReglages();
   sauver();
 }
@@ -275,6 +285,12 @@ function afficher(json){
     });
   });
 
+  const reg = {}; for (const k in DEF) reg[k] = S[k]; reg.scen = S.scen;
+  $("cfgTexte").value = JSON.stringify({
+    lieu: {nom: lieu.nom, latitude: Math.round(lieu.latitude * 10) / 10, longitude: Math.round(lieu.longitude * 10) / 10},
+    reglages: reg
+  }, null, 2);
+  $("alerteCarte").hidden = false;
   $("resultat").hidden = false; $("socCarte").hidden = false;
   msg("Prévisions de " + new Date().toLocaleTimeString("fr-FR", {hour:"2-digit", minute:"2-digit"}) + ".");
 }
@@ -285,6 +301,13 @@ ecrireReglages();
 if (lieu) { $("ville").value = lieu.nom; prevoir(); }
 $("formVille").addEventListener("submit", e => { e.preventDefault(); chercher(); });
 for (const k in DEF) $(k).addEventListener("change", () => { if (lieu) prevoir(); else lireReglages(); });
+$("scen").addEventListener("change", () => { if (lieu) prevoir(); else lireReglages(); });
+$("cfgCopier").addEventListener("click", async () => {
+  const b = $("cfgCopier"); $("cfgTexte").select();
+  try { await navigator.clipboard.writeText($("cfgTexte").value); b.textContent = "Copié"; }
+  catch(e) { b.textContent = "Copie impossible : sélectionne le texte à la main"; }
+  setTimeout(() => { b.textContent = "Copier"; }, 2500);
+});
 </script>
 </body>
 </html>
