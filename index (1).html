@@ -1,0 +1,288 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Soleil du fourgon</title>
+<style>
+:root{--bg:#eef3f1;--panel:#fff;--ink:#14262b;--mute:#5c6f74;--line:#d5dfdc;
+--flat:#6f8fa0;--tilt:#d99a00;--track:#2e8b57;--bad:#c0392b;--ok:#2e8b57;--focus:#1f6feb}
+@media(prefers-color-scheme:dark){:root{--bg:#0f1b1f;--panel:#16272c;--ink:#e6efed;--mute:#97aaad;--line:#2a3f45;
+--flat:#8fb0c0;--tilt:#f0b429;--track:#4fc08a;--bad:#ff7b6b;--ok:#4fc08a;--focus:#6ea8ff}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:46rem;margin:0 auto;padding:16px 14px 40px}
+h1{font-size:1.5rem;margin:4px 0 2px}
+h2{font-size:1.25rem;margin:0 0 4px}
+.sub{color:var(--mute);margin:0 0 14px}
+.carte{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+form.recherche{display:flex;gap:8px}
+input,button{font:inherit;color:inherit}
+input{width:100%;padding:9px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg)}
+button{padding:9px 14px;border:0;border-radius:8px;background:var(--ink);color:var(--panel);cursor:pointer;white-space:nowrap}
+button.choix{display:block;width:100%;text-align:left;margin-top:6px;background:var(--bg);color:var(--ink);border:1px solid var(--line)}
+input:focus-visible,button:focus-visible,summary:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+#etat{color:var(--mute);margin:8px 0 0;min-height:1.2em}
+#etat.err{color:var(--bad)}
+summary{cursor:pointer;font-weight:600}
+.grille{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+.grille label{display:block;font-size:.85rem;color:var(--mute)}
+.verdict{display:flex;gap:8px;align-items:baseline;margin:6px 0}
+.pt{width:10px;height:10px;border-radius:50%;flex:none}
+.legende{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:.85rem;color:var(--mute);margin:12px 0 4px}
+.legende span::before{content:"";display:inline-block;width:12px;height:8px;border-radius:2px;margin-right:5px;background:var(--c)}
+.legende .tirets::before{background:none;border-left:2px dashed var(--ink);width:0;height:12px;border-radius:0;vertical-align:-2px}
+.jour{display:grid;grid-template-columns:4.6rem 1fr;gap:8px;padding:8px 0;border-top:1px solid var(--line)}
+.jlabel{font-size:.85rem}
+.jlabel small{display:block;color:var(--mute)}
+.barres{position:relative;margin-right:4.8rem}
+.ligne{position:relative;height:16px;margin:2px 0}
+.b{display:block;height:12px;margin-top:2px;border-radius:3px;min-width:2px}
+.v{position:absolute;left:calc(100% + 6px);top:0;font-size:.78rem;white-space:nowrap;font-variant-numeric:tabular-nums}
+.cons{position:absolute;top:0;bottom:0;width:0;border-left:2px dashed var(--ink);opacity:.75}
+.incertain .b{opacity:.5}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{padding:6px 4px;text-align:right;border-top:1px solid var(--line)}
+th:first-child,td:first-child{text-align:left}
+td.bas{color:var(--bad);font-weight:700}
+.notes{font-size:.85rem;color:var(--mute)}
+.notes li{margin-bottom:4px}
+</style>
+</head>
+<body>
+<main>
+<h1>Soleil du fourgon</h1>
+<p class="sub">Production solaire prévue sur 7 jours, selon la météo du lieu où tu te gares.</p>
+
+<section class="carte">
+  <form class="recherche" id="formVille">
+    <input id="ville" type="text" placeholder="Ville, adresse ou code postal" autocomplete="off" aria-label="Lieu">
+    <button type="submit">Chercher</button>
+  </form>
+  <div id="choix"></div>
+  <p id="etat" role="status"></p>
+</section>
+
+<details class="carte" id="reglages">
+  <summary>Réglages du fourgon</summary>
+  <div class="grille">
+    <label>Puissance du panneau (W)<input id="pw" type="number" inputmode="decimal" min="10" step="10"></label>
+    <label>Coefficient de pertes (0,5 à 0,9)<input id="pr" type="number" inputmode="decimal" min="0.3" max="1" step="0.01"></label>
+    <label>Inclinaison à la main (°)<input id="tilt" type="number" inputmode="decimal" min="0" max="90" step="1"></label>
+    <label>Orientation (0 = sud, -90 = est)<input id="az" type="number" inputmode="decimal" min="-180" max="180" step="5"></label>
+    <label>Batterie (Ah)<input id="ah" type="number" inputmode="decimal" min="1" step="10"></label>
+    <label>Nombre de batteries<input id="nb" type="number" inputmode="decimal" min="1" step="1"></label>
+    <label>Tension (V)<input id="volt" type="number" inputmode="decimal" min="6" step="0.1"></label>
+    <label>Part utilisable (%)<input id="use" type="number" inputmode="decimal" min="10" max="100" step="5"></label>
+    <label>Consommation (Wh par jour)<input id="conso" type="number" inputmode="decimal" min="0" step="50"></label>
+    <label>Charge de départ (%)<input id="soc0" type="number" inputmode="decimal" min="0" max="100" step="5"></label>
+    <label>Seuil d’alerte (%)<input id="seuil" type="number" inputmode="decimal" min="0" max="100" step="5"></label>
+    <label>Rafales qui couchent le tracker (km/h)<input id="gust" type="number" inputmode="decimal" min="10" max="150" step="5"></label>
+  </div>
+</details>
+
+<section class="carte" id="resultat" hidden>
+  <h2 id="titre"></h2>
+  <p class="sub" id="soustitre"></p>
+  <div id="verdicts"></div>
+  <div class="legende" id="legende"></div>
+  <div id="jours"></div>
+</section>
+
+<section class="carte" id="socCarte" hidden>
+  <h2>Charge de la batterie en fin de journée</h2>
+  <table id="soc"></table>
+</section>
+
+<section class="carte notes">
+  <ul>
+    <li>Les prévisions sont fiables jusqu’à 4 ou 5 jours ; au-delà, les barres sont estompées.</li>
+    <li>Le bilan de batterie est simplifié (un solde par jour). La charge la plus basse tombe en réalité juste avant le lever du soleil, donc garde de la marge.</li>
+    <li>Le tracker suppose un panneau qui suit le soleil par temps clair et se couche à plat par ciel couvert. Les heures où les rafales prévues dépassent ton seuil, il reste à plat. Les prévisions de rafales sont souvent plus faibles que le vent réel sur un emplacement exposé : prends un seuil plus bas que le vrai. La consommation du tracker n’est pas comptée.</li>
+    <li>Données météo : Open-Meteo (usage personnel gratuit).</li>
+  </ul>
+</section>
+</main>
+
+<script src="calc.js"></script>
+<script>
+"use strict";
+const $ = id => document.getElementById(id);
+const DEF = {pw:300, pr:0.75, tilt:45, az:0, ah:100, nb:1, volt:12.8, use:90, conso:400, soc0:80, seuil:20, gust:40};
+const LIMITES = {pw:[10,5000], pr:[0.3,1], tilt:[0,90], az:[-180,180], ah:[1,2000], nb:[1,10], volt:[6,60], use:[10,100], conso:[0,20000], soc0:[0,100], seuil:[0,100], gust:[10,150]};
+const SCEN = [["flat","À plat"],["tilt","Incliné"],["track","Tracker 2 axes"]];
+let S = {...DEF};
+let lieu = null;
+let cache = null;
+
+/* ---------- mémoire locale (facultative) ---------- */
+function sauver(){
+  try { localStorage.setItem("soleilFourgon", JSON.stringify({S, lieu})); } catch(e){}
+}
+function charger(){
+  try {
+    const d = JSON.parse(localStorage.getItem("soleilFourgon") || "null");
+    if (d && d.S) S = {...DEF, ...d.S};
+    if (d && d.lieu) lieu = d.lieu;
+  } catch(e){}
+}
+
+/* ---------- réglages ---------- */
+function ecrireReglages(){ for (const k in DEF) $(k).value = S[k]; }
+function lireReglages(){
+  for (const k in DEF) {
+    let v = parseFloat(String($(k).value).replace(",", "."));
+    if (!isFinite(v)) v = DEF[k];
+    S[k] = Math.min(LIMITES[k][1], Math.max(LIMITES[k][0], v));
+  }
+  ecrireReglages();
+  sauver();
+}
+
+/* ---------- messages ---------- */
+function msg(t, erreur){ const e = $("etat"); e.textContent = t; e.className = erreur ? "err" : ""; }
+
+/* ---------- recherche du lieu ---------- */
+async function chercher(){
+  const q = $("ville").value.trim();
+  $("choix").textContent = "";
+  if (q.length < 2) { msg("Tape au moins 2 lettres.", true); return; }
+  msg("Recherche du lieu…");
+  try {
+    const r = await fetch("https://geocoding-api.open-meteo.com/v1/search?name=" + encodeURIComponent(q) + "&count=5&language=fr");
+    if (!r.ok) throw new Error("http " + r.status);
+    const j = await r.json();
+    if (!j.results || !j.results.length) { msg("Aucun lieu trouvé. Essaie le code postal ou une grande ville proche.", true); return; }
+    if (j.results.length === 1) { choisir(j.results[0]); return; }
+    msg("Plusieurs lieux possibles, choisis le bon :");
+    j.results.forEach(p => {
+      const b = document.createElement("button");
+      b.type = "button"; b.className = "choix";
+      b.textContent = [p.name, p.admin1, p.country].filter(Boolean).join(", ");
+      b.addEventListener("click", () => { $("choix").textContent = ""; choisir(p); });
+      $("choix").appendChild(b);
+    });
+  } catch(e) {
+    msg("Impossible de joindre le service de recherche. Vérifie ta connexion.", true);
+  }
+}
+function choisir(p){
+  lieu = {nom: [p.name, p.admin1].filter(Boolean).join(", "), latitude: p.latitude, longitude: p.longitude};
+  $("ville").value = lieu.nom;
+  sauver();
+  prevoir();
+}
+
+/* ---------- prévisions ---------- */
+async function prevoir(){
+  if (!lieu) return;
+  lireReglages();
+  const cle = [lieu.latitude, lieu.longitude, S.tilt, S.az].join("|");
+  if (cache && cache.cle === cle && Date.now() - cache.t < 600000) { afficher(cache.json); return; }
+  msg("Récupération des prévisions…");
+  const url = "https://api.open-meteo.com/v1/forecast?latitude=" + lieu.latitude + "&longitude=" + lieu.longitude
+    + "&hourly=shortwave_radiation,direct_normal_irradiance,diffuse_radiation,global_tilted_irradiance,wind_gusts_10m"
+    + "&tilt=" + S.tilt + "&azimuth=" + S.az + "&wind_speed_unit=kmh&forecast_days=7&timezone=auto";
+  try {
+    const r = await fetch(url);
+    if (!r.ok) throw new Error("http " + r.status);
+    const json = await r.json();
+    if (!json.hourly || !json.hourly.time) throw new Error("réponse vide");
+    cache = {cle, json, t: Date.now()};
+    afficher(json);
+  } catch(e) {
+    msg("Prévisions indisponibles pour l’instant. Réessaie dans quelques minutes.", true);
+  }
+}
+
+/* ---------- calculs (fichier calc.js, partagé avec le futur script d’alerte) ---------- */
+function calculer(json){ return SoleilCalc.calculer(json, S, lieu); }
+function simulerBatterie(jours, cap){
+  const res = {};
+  SCEN.forEach(([c]) => {
+    let soc = cap * S.soc0 / 100;
+    res[c] = jours.map(j => {
+      soc = Math.min(cap, Math.max(0, soc + j[c] - S.conso));
+      return soc / cap * 100;
+    });
+  });
+  return res;
+}
+
+/* ---------- affichage ---------- */
+const fmtJour = new Intl.DateTimeFormat("fr-FR", {weekday:"short", day:"numeric", month:"short", timeZone:"UTC"});
+const nomJour = j => fmtJour.format(new Date(j + "T12:00:00Z"));
+const wh = v => Math.round(v).toLocaleString("fr-FR") + " Wh";
+
+function afficher(json){
+  lireReglages();
+  const jours = calculer(json);
+  const cap = S.ah * S.nb * S.volt * S.use / 100;
+  const soc = simulerBatterie(jours, cap);
+  const nomsScen = {flat:"À plat", tilt:"Incliné à " + S.tilt + "°", track:"Tracker 2 axes"};
+  const couleur = {flat:"var(--flat)", tilt:"var(--tilt)", track:"var(--track)"};
+
+  const moy = jours.reduce((a, j) => a + j.flat, 0) / jours.length;
+  $("titre").textContent = "À plat : " + wh(moy) + " par jour en moyenne";
+  $("soustitre").textContent = lieu.nom + " · consommation saisie : " + wh(S.conso) + " par jour · batterie utile : " + wh(cap);
+
+  const v = $("verdicts"); v.textContent = "";
+  SCEN.forEach(([c]) => {
+    const i = soc[c].findIndex(p => p < S.seuil);
+    const ligne = document.createElement("div"); ligne.className = "verdict";
+    const pt = document.createElement("span"); pt.className = "pt"; pt.style.background = couleur[c];
+    const tx = document.createElement("span");
+    tx.textContent = nomsScen[c] + " : " + (i < 0
+      ? "batterie tenable sur 7 jours."
+      : "batterie sous " + S.seuil + " % dès le " + nomJour(jours[i].jour) + ".");
+    if (i >= 0) tx.style.color = "var(--bad)";
+    ligne.append(pt, tx); v.appendChild(ligne);
+  });
+
+  const lg = $("legende"); lg.textContent = "";
+  SCEN.forEach(([c]) => { const s = document.createElement("span"); s.style.setProperty("--c", couleur[c]); s.textContent = nomsScen[c]; lg.appendChild(s); });
+  const sc = document.createElement("span"); sc.className = "tirets"; sc.textContent = "Ta consommation"; lg.appendChild(sc);
+
+  const max = Math.max(S.conso, ...jours.flatMap(j => [j.flat, j.tilt, j.track])) * 1.08 || 1;
+  const zone = $("jours"); zone.textContent = "";
+  jours.forEach((j, i) => {
+    const row = document.createElement("div"); row.className = "jour" + (i >= 5 ? " incertain" : "");
+    const lab = document.createElement("div"); lab.className = "jlabel"; lab.textContent = nomJour(j.jour);
+    if (i >= 5) { const s = document.createElement("small"); s.textContent = "moins fiable"; lab.appendChild(s); }
+    if (j.couche > 0) { const s = document.createElement("small"); s.textContent = "vent : " + j.couche + " h à plat"; lab.appendChild(s); }
+    const bar = document.createElement("div"); bar.className = "barres";
+    SCEN.forEach(([c]) => {
+      const l = document.createElement("div"); l.className = "ligne";
+      const b = document.createElement("span"); b.className = "b"; b.style.background = couleur[c]; b.style.width = (j[c] / max * 100) + "%";
+      const t = document.createElement("span"); t.className = "v"; t.textContent = wh(j[c]);
+      l.append(b, t); bar.appendChild(l);
+    });
+    const cs = document.createElement("i"); cs.className = "cons"; cs.style.left = (S.conso / max * 100) + "%"; bar.appendChild(cs);
+    row.append(lab, bar); zone.appendChild(row);
+  });
+
+  const tb = $("soc"); tb.textContent = "";
+  const head = tb.insertRow();
+  ["Jour", "À plat", "Incliné", "Tracker"].forEach(t => { const th = document.createElement("th"); th.textContent = t; head.appendChild(th); });
+  jours.forEach((j, i) => {
+    const r = tb.insertRow();
+    r.insertCell().textContent = nomJour(j.jour);
+    SCEN.forEach(([c]) => {
+      const td = r.insertCell(); td.textContent = Math.round(soc[c][i]) + " %";
+      if (soc[c][i] < S.seuil) td.className = "bas";
+    });
+  });
+
+  $("resultat").hidden = false; $("socCarte").hidden = false;
+  msg("Prévisions de " + new Date().toLocaleTimeString("fr-FR", {hour:"2-digit", minute:"2-digit"}) + ".");
+}
+
+/* ---------- démarrage ---------- */
+charger();
+ecrireReglages();
+if (lieu) { $("ville").value = lieu.nom; prevoir(); }
+$("formVille").addEventListener("submit", e => { e.preventDefault(); chercher(); });
+for (const k in DEF) $(k).addEventListener("change", () => { if (lieu) prevoir(); else lireReglages(); });
+</script>
+</body>
+</html>
