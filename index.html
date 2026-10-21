@@ -77,7 +77,8 @@ td.bas{color:var(--bad);font-weight:700}
     <label>Consommation (Wh par jour)<input id="conso" type="number" inputmode="decimal" min="0" step="50"></label>
     <label>Charge de départ (%)<input id="soc0" type="number" inputmode="decimal" min="0" max="100" step="5"></label>
     <label>Seuil d’alerte (%)<input id="seuil" type="number" inputmode="decimal" min="0" max="100" step="5"></label>
-    <label>Rafales qui couchent le tracker (km/h)<input id="gust" type="number" inputmode="decimal" min="10" max="150" step="5"></label>
+    <label>Le tracker se couche au-dessus de (km/h)<input id="gust" type="number" inputmode="decimal" min="10" max="150" step="5"></label>
+    <label>Il se relève sous (km/h)<input id="gustBas" type="number" inputmode="decimal" min="5" max="150" step="5"></label>
   </div>
 </details>
 
@@ -98,7 +99,7 @@ td.bas{color:var(--bad);font-weight:700}
   <ul>
     <li>Les prévisions sont fiables jusqu’à 4 ou 5 jours ; au-delà, les barres sont estompées.</li>
     <li>Le bilan de batterie est simplifié (un solde par jour). La charge la plus basse tombe en réalité juste avant le lever du soleil, donc garde de la marge.</li>
-    <li>Le tracker suppose un panneau qui suit le soleil par temps clair et se couche à plat par ciel couvert. Les heures où les rafales prévues dépassent ton seuil, il reste à plat. Les prévisions de rafales sont souvent plus faibles que le vent réel sur un emplacement exposé : prends un seuil plus bas que le vrai. La consommation du tracker n’est pas comptée.</li>
+    <li>Le tracker suppose un panneau qui suit le soleil par temps clair et se couche à plat par ciel couvert. Il se couche quand les rafales prévues dépassent le seuil haut, reste à plat jusqu’au seuil bas, puis perd environ 20 minutes avant de se relever. Les prévisions de rafales sont souvent plus faibles que le vent réel sur un emplacement exposé : prends un seuil plus bas que le vrai. La consommation du tracker n’est pas comptée.</li>
     <li>Données météo : Open-Meteo (usage personnel gratuit).</li>
   </ul>
 </section>
@@ -108,8 +109,8 @@ td.bas{color:var(--bad);font-weight:700}
 <script>
 "use strict";
 const $ = id => document.getElementById(id);
-const DEF = {pw:300, pr:0.75, tilt:45, az:0, ah:100, nb:1, volt:12.8, use:90, conso:400, soc0:80, seuil:20, gust:40};
-const LIMITES = {pw:[10,5000], pr:[0.3,1], tilt:[0,90], az:[-180,180], ah:[1,2000], nb:[1,10], volt:[6,60], use:[10,100], conso:[0,20000], soc0:[0,100], seuil:[0,100], gust:[10,150]};
+const DEF = {pw:300, pr:0.75, tilt:45, az:0, ah:100, nb:1, volt:12.8, use:90, conso:400, soc0:80, seuil:20, gust:50, gustBas:40};
+const LIMITES = {pw:[10,5000], pr:[0.3,1], tilt:[0,90], az:[-180,180], ah:[1,2000], nb:[1,10], volt:[6,60], use:[10,100], conso:[0,20000], soc0:[0,100], seuil:[0,100], gust:[10,150], gustBas:[5,150]};
 const SCEN = [["flat","À plat"],["tilt","Incliné"],["track","Tracker 2 axes"]];
 let S = {...DEF};
 let lieu = null;
@@ -135,6 +136,7 @@ function lireReglages(){
     if (!isFinite(v)) v = DEF[k];
     S[k] = Math.min(LIMITES[k][1], Math.max(LIMITES[k][0], v));
   }
+  if (S.gustBas > S.gust) S.gustBas = S.gust;
   ecrireReglages();
   sauver();
 }
@@ -249,7 +251,7 @@ function afficher(json){
     const row = document.createElement("div"); row.className = "jour" + (i >= 5 ? " incertain" : "");
     const lab = document.createElement("div"); lab.className = "jlabel"; lab.textContent = nomJour(j.jour);
     if (i >= 5) { const s = document.createElement("small"); s.textContent = "moins fiable"; lab.appendChild(s); }
-    if (j.couche > 0) { const s = document.createElement("small"); s.textContent = "vent : " + j.couche + " h à plat"; lab.appendChild(s); }
+    if (j.couche > 0) { const s = document.createElement("small"); s.textContent = "vent : " + j.couche.toLocaleString("fr-FR", {maximumFractionDigits:1}) + " h à plat"; lab.appendChild(s); }
     const bar = document.createElement("div"); bar.className = "barres";
     SCEN.forEach(([c]) => {
       const l = document.createElement("div"); l.className = "ligne";
