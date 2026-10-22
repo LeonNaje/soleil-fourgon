@@ -3,7 +3,7 @@ name: Alerte solaire
 on:
   schedule:
     # 6 h UTC = 8 h en heure d'été, 7 h en heure d'hiver (France). GitHub peut retarder de quelques minutes.
-    - cron: "0 6 * * *"
+    - cron: "17 6 * * *"
   workflow_dispatch:   # permet un lancement manuel pour tester
 
 permissions:
