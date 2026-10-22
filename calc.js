@@ -1,10 +1,39 @@
+Claude
+/
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Calc · JS
 /* Calculs solaires partagés : utilisés par la page (navigateur) et, plus tard, par le script d'alerte (Node). */
 (function (root, factory) {
   if (typeof module === "object" && module.exports) module.exports = factory();
   else root.SoleilCalc = factory();
 })(typeof self !== "undefined" ? self : this, function () {
   "use strict";
-
+ 
   /* Hauteur du soleil en degrés (formules NOAA simplifiées). ms = instant en UTC. */
   function elevation(lat, lon, ms) {
     const rad = Math.PI / 180, d = new Date(ms);
@@ -17,7 +46,7 @@
     const s = Math.sin(lat * rad) * Math.sin(dec) + Math.cos(lat * rad) * Math.cos(dec) * Math.cos(ha);
     return Math.asin(Math.max(-1, Math.min(1, s))) / rad;
   }
-
+ 
   /* json : réponse Open-Meteo (hourly + utc_offset_seconds)
      S    : réglages {pw, pr, gust, ...}   lieu : {latitude, longitude}
      Retourne un tableau de jours : {jour, flat, tilt, track, couche}
@@ -58,6 +87,12 @@
     });
     return Object.keys(par).map(function (c) { return par[c]; });
   }
-
-  return { elevation: elevation, calculer: calculer };
+ 
+  /* Cap boussole (0 = nord, 90 = est, 180 = sud, 270 = ouest)
+     -> azimut attendu par Open-Meteo (0 = sud, -90 = est, 90 = ouest). */
+  function azimutApi(cap) { return cap - 180; }
+ 
+  return { elevation: elevation, calculer: calculer, azimutApi: azimutApi };
 });
+ 
+Claude répond.
