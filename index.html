@@ -6,9 +6,9 @@
 <title>Soleil du fourgon</title>
 <style>
 :root{--bg:#eef3f1;--panel:#fff;--ink:#14262b;--mute:#5c6f74;--line:#d5dfdc;
---flat:#6f8fa0;--tilt:#d99a00;--track:#2e8b57;--bad:#c0392b;--ok:#2e8b57;--focus:#1f6feb}
+--flat:#d99a00;--tilt:#6f8fa0;--track:#2e8b57;--bad:#c0392b;--ok:#2e8b57;--focus:#1f6feb}
 @media(prefers-color-scheme:dark){:root{--bg:#0f1b1f;--panel:#16272c;--ink:#e6efed;--mute:#97aaad;--line:#2a3f45;
---flat:#8fb0c0;--tilt:#f0b429;--track:#4fc08a;--bad:#ff7b6b;--ok:#4fc08a;--focus:#6ea8ff}}
+--flat:#f0b429;--tilt:#8fb0c0;--track:#4fc08a;--bad:#ff7b6b;--ok:#4fc08a;--focus:#6ea8ff}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
 main{max-width:46rem;margin:0 auto;padding:16px 14px 40px}
@@ -70,7 +70,7 @@ td.bas{color:var(--bad);font-weight:700}
     <label>Puissance du panneau (W)<input id="pw" type="number" inputmode="decimal" min="10" step="10"></label>
     <label>Coefficient de pertes (0,5 à 0,9)<input id="pr" type="number" inputmode="decimal" min="0.3" max="1" step="0.01"></label>
     <label>Inclinaison à la main (°)<input id="tilt" type="number" inputmode="decimal" min="0" max="90" step="1"></label>
-    <label>Orientation (0 = sud, -90 = est)<input id="az" type="number" inputmode="decimal" min="-180" max="180" step="5"></label>
+    <label>Orientation (0 = nord, 90 = est, 180 = sud, 270 = ouest)<input id="cap" type="number" inputmode="decimal" min="0" max="360" step="5"></label>
     <label>Batterie (Ah)<input id="ah" type="number" inputmode="decimal" min="1" step="10"></label>
     <label>Nombre de batteries<input id="nb" type="number" inputmode="decimal" min="1" step="1"></label>
     <label>Tension (V)<input id="volt" type="number" inputmode="decimal" min="6" step="0.1"></label>
@@ -80,7 +80,7 @@ td.bas{color:var(--bad);font-weight:700}
     <label>Seuil d’alerte (%)<input id="seuil" type="number" inputmode="decimal" min="0" max="100" step="5"></label>
     <label>Le tracker se couche au-dessus de (km/h)<input id="gust" type="number" inputmode="decimal" min="10" max="150" step="5"></label>
     <label>Il se relève sous (km/h)<input id="gustBas" type="number" inputmode="decimal" min="5" max="150" step="5"></label>
-    <label>Alerte du matin calculée pour<select id="scen"><option value="flat">Panneau à plat</option><option value="tilt">Incliné à la main</option><option value="track">Tracker 2 axes</option></select></label>
+    <label>Alerte du matin calculée pour<select id="scen"><option value="flat">Panneau horizontal</option><option value="tilt">Incliné à la main</option><option value="track">Tracker 2 axes</option></select></label>
   </div>
 </details>
 
@@ -109,6 +109,7 @@ td.bas{color:var(--bad);font-weight:700}
     <li>Les prévisions sont fiables jusqu’à 4 ou 5 jours ; au-delà, les barres sont estompées.</li>
     <li>Le bilan de batterie est simplifié (un solde par jour). La charge la plus basse tombe en réalité juste avant le lever du soleil, donc garde de la marge.</li>
     <li>Le tracker suppose un panneau qui suit le soleil par temps clair et se couche à plat par ciel couvert. Il se couche quand les rafales prévues dépassent le seuil haut, reste à plat jusqu’au seuil bas, puis perd environ 20 minutes avant de se relever. Les prévisions de rafales sont souvent plus faibles que le vent réel sur un emplacement exposé : prends un seuil plus bas que le vrai. La consommation du tracker n’est pas comptée.</li>
+    <li>Le panneau horizontal et le panneau incliné sont supposés tenir au vent sans se coucher (installation fixe bien ancrée). Seul le tracker se couche, par protection, ce qui lui coûte de la production les jours de vent.</li>
     <li>Données météo : Open-Meteo (usage personnel gratuit).</li>
   </ul>
 </section>
@@ -118,9 +119,14 @@ td.bas{color:var(--bad);font-weight:700}
 <script>
 "use strict";
 const $ = id => document.getElementById(id);
-const DEF = {pw:300, pr:0.75, tilt:45, az:0, ah:100, nb:1, volt:12.8, use:90, conso:400, soc0:80, seuil:20, gust:50, gustBas:40};
-const LIMITES = {pw:[10,5000], pr:[0.3,1], tilt:[0,90], az:[-180,180], ah:[1,2000], nb:[1,10], volt:[6,60], use:[10,100], conso:[0,20000], soc0:[0,100], seuil:[0,100], gust:[10,150], gustBas:[5,150]};
-const SCEN = [["flat","À plat"],["tilt","Incliné"],["track","Tracker 2 axes"]];
+const DEF = {pw:300, pr:0.75, tilt:45, cap:180, ah:100, nb:1, volt:12.8, use:90, conso:400, soc0:80, seuil:20, gust:50, gustBas:40};
+const LIMITES = {pw:[10,5000], pr:[0.3,1], tilt:[0,90], cap:[0,360], ah:[1,2000], nb:[1,10], volt:[6,60], use:[10,100], conso:[0,20000], soc0:[0,100], seuil:[0,100], gust:[10,150], gustBas:[5,150]};
+const SCEN = [["flat","Horizontal"],["tilt","Incliné"],["track","Tracker 2 axes"]];
+const POINTS = ["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSO","SO","OSO","O","ONO","NO","NNO"];
+function orientation(cap){
+  const pt = POINTS[Math.round(cap / 22.5) % 16];
+  return cap === 180 ? "plein sud" : pt + " (" + cap + "°)";
+}
 let S = {...DEF, scen:"flat"};
 let lieu = null;
 let cache = null;
@@ -189,12 +195,12 @@ function choisir(p){
 async function prevoir(){
   if (!lieu) return;
   lireReglages();
-  const cle = [lieu.latitude, lieu.longitude, S.tilt, S.az].join("|");
+  const cle = [lieu.latitude, lieu.longitude, S.tilt, S.cap].join("|");
   if (cache && cache.cle === cle && Date.now() - cache.t < 600000) { afficher(cache.json); return; }
   msg("Récupération des prévisions…");
   const url = "https://api.open-meteo.com/v1/forecast?latitude=" + lieu.latitude + "&longitude=" + lieu.longitude
     + "&hourly=shortwave_radiation,direct_normal_irradiance,diffuse_radiation,global_tilted_irradiance,wind_gusts_10m"
-    + "&tilt=" + S.tilt + "&azimuth=" + S.az + "&wind_speed_unit=kmh&forecast_days=7&timezone=auto";
+    + "&tilt=" + S.tilt + "&azimuth=" + SoleilCalc.azimutApi(S.cap) + "&wind_speed_unit=kmh&forecast_days=7&timezone=auto";
   try {
     const r = await fetch(url);
     if (!r.ok) throw new Error("http " + r.status);
@@ -231,11 +237,11 @@ function afficher(json){
   const jours = calculer(json);
   const cap = S.ah * S.nb * S.volt * S.use / 100;
   const soc = simulerBatterie(jours, cap);
-  const nomsScen = {flat:"À plat", tilt:"Incliné à " + S.tilt + "°", track:"Tracker 2 axes"};
+  const nomsScen = {flat:"Horizontal", tilt:"Incliné à " + S.tilt + "° · " + orientation(S.cap), track:"Tracker 2 axes"};
   const couleur = {flat:"var(--flat)", tilt:"var(--tilt)", track:"var(--track)"};
 
   const moy = jours.reduce((a, j) => a + j.flat, 0) / jours.length;
-  $("titre").textContent = "À plat : " + wh(moy) + " par jour en moyenne";
+  $("titre").textContent = "Horizontal : " + wh(moy) + " par jour en moyenne";
   $("soustitre").textContent = lieu.nom + " · consommation saisie : " + wh(S.conso) + " par jour · batterie utile : " + wh(cap);
 
   const v = $("verdicts"); v.textContent = "";
@@ -261,7 +267,7 @@ function afficher(json){
     const row = document.createElement("div"); row.className = "jour" + (i >= 5 ? " incertain" : "");
     const lab = document.createElement("div"); lab.className = "jlabel"; lab.textContent = nomJour(j.jour);
     if (i >= 5) { const s = document.createElement("small"); s.textContent = "moins fiable"; lab.appendChild(s); }
-    if (j.couche > 0) { const s = document.createElement("small"); s.textContent = "vent : " + j.couche.toLocaleString("fr-FR", {maximumFractionDigits:1}) + " h à plat"; lab.appendChild(s); }
+    if (j.couche > 0) { const s = document.createElement("small"); s.textContent = "vent : " + j.couche.toLocaleString("fr-FR", {maximumFractionDigits:1}) + " h à l’horizontale"; lab.appendChild(s); }
     const bar = document.createElement("div"); bar.className = "barres";
     SCEN.forEach(([c]) => {
       const l = document.createElement("div"); l.className = "ligne";
@@ -275,7 +281,7 @@ function afficher(json){
 
   const tb = $("soc"); tb.textContent = "";
   const head = tb.insertRow();
-  ["Jour", "À plat", "Incliné", "Tracker"].forEach(t => { const th = document.createElement("th"); th.textContent = t; head.appendChild(th); });
+  ["Jour", "Horizontal", "Incliné", "Tracker"].forEach(t => { const th = document.createElement("th"); th.textContent = t; head.appendChild(th); });
   jours.forEach((j, i) => {
     const r = tb.insertRow();
     r.insertCell().textContent = nomJour(j.jour);
