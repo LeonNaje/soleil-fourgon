@@ -1,3 +1,4 @@
+
 /* Alerte solaire du matin : prévisions Open-Meteo -> bilan batterie -> notification ntfy.
    Lancé chaque jour par GitHub Actions (voir alerte.yml). Utilise calc.js et config.json. */
 "use strict";
@@ -5,8 +6,8 @@ const fs = require("fs");
 const path = require("path");
 const C = require("./calc.js");
 
-const DEF = { pw: 300, pr: 0.75, tilt: 45, az: 0, ah: 100, nb: 1, volt: 12.8, use: 90, conso: 400, soc0: 80, seuil: 20, gust: 50, gustBas: 40, scen: "flat" };
-const NOMS = { flat: "panneau à plat", tilt: "panneau incliné", track: "tracker 2 axes" };
+const DEF = { pw: 300, pr: 0.75, tilt: 45, cap: 180, ah: 100, nb: 1, volt: 12.8, use: 90, conso: 400, soc0: 80, seuil: 20, gust: 50, gustBas: 40, scen: "flat" };
+const NOMS = { flat: "panneau horizontal", tilt: "panneau incliné", track: "tracker 2 axes" };
 
 const fmtJour = new Intl.DateTimeFormat("fr-FR", { weekday: "long", day: "numeric", month: "short", timeZone: "UTC" });
 const nomJour = (j) => fmtJour.format(new Date(j + "T12:00:00Z"));
@@ -43,7 +44,7 @@ async function main() {
 
   const url = "https://api.open-meteo.com/v1/forecast?latitude=" + lieu.latitude + "&longitude=" + lieu.longitude
     + "&hourly=shortwave_radiation,direct_normal_irradiance,diffuse_radiation,global_tilted_irradiance,wind_gusts_10m"
-    + "&tilt=" + S.tilt + "&azimuth=" + S.az + "&wind_speed_unit=kmh&forecast_days=7&timezone=auto";
+    + "&tilt=" + S.tilt + "&azimuth=" + C.azimutApi(S.cap) + "&wind_speed_unit=kmh&forecast_days=7&timezone=auto";
   const r = await fetch(url);
   if (!r.ok) throw new Error("Open-Meteo : réponse HTTP " + r.status);
   const json = await r.json();
@@ -66,7 +67,7 @@ async function main() {
   lignes.push("Aujourd’hui : " + wh(jours[0][S.scen]) + " prévus pour " + wh(S.conso) + " consommés.");
   jours.slice(1, 4).forEach((j) => lignes.push(nomJour(j.jour) + " : " + wh(j[S.scen])));
   if (S.scen === "track" && jours[0].couche > 0) {
-    lignes.push("Vent : tracker à plat environ " + jours[0].couche.toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " h aujourd’hui.");
+    lignes.push("Vent : tracker à l’horizontale environ " + jours[0].couche.toLocaleString("fr-FR", { maximumFractionDigits: 1 }) + " h aujourd’hui.");
   }
   if (risque) {
     lignes.push("Risque : en partant de " + S.soc0 + " % ce matin, la batterie descendrait à "
