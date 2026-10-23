@@ -241,7 +241,7 @@ function afficher(json){
   const couleur = {flat:"var(--flat)", tilt:"var(--tilt)", track:"var(--track)"};
 
   const moy = jours.reduce((a, j) => a + j.flat, 0) / jours.length;
-  $("titre").textContent = "Horizontal : " + wh(moy) + " par jour en moyenne";
+  $("titre").textContent = "À l’horizontale : "À l’horizontale : " + wh(moy) + " prévus par jour en moyenne sur les 7 prochains jours glissants";
   $("soustitre").textContent = lieu.nom + " · consommation saisie : " + wh(S.conso) + " par jour · batterie utile : " + wh(cap);
 
   const v = $("verdicts"); v.textContent = "";
