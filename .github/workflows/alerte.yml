@@ -1,10 +1,13 @@
 name: Alerte solaire
 
 on:
-  schedule:
-    # 5:43 UTC = 8 h en heure d'été, 7 h en heure d'hiver (France). GitHub peut retarder de quelques minutes. En réalité l'alerte tombe vers 14h00...
-    - cron: "43 5 * * *"
-  workflow_dispatch:   # permet un lancement manuel pour tester
+  # Cron désactivé le 2026-11-18 : GitHub ne le déclenchait ni tous les jours
+  # ni à l'heure voulue (souvent vers 14 h au lieu de 8 h). Les données sont
+  # consultées directement dans l'onglet navigateur (index.html).
+  # Pour réactiver, remettre :
+  #   schedule:
+  #     - cron: "43 5 * * *"
+  workflow_dispatch:   # lancement manuel depuis l'onglet Actions de GitHub
 
 permissions:
   contents: read

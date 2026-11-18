@@ -1,1 +1,12 @@
 *.csv
+
+# Suivi privé, jamais diffusé (dépôt public)
+HISTORIQUE.md
+
+# Secrets
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+*.key
+*.pem
